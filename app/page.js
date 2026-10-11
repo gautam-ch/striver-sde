@@ -13,6 +13,7 @@ export default function SdeSheetPage() {
   const [showPin, setShowPin] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Dark Theme state ('dark' | 'light')
   const [theme, setTheme] = useState("dark");
@@ -40,6 +41,7 @@ export default function SdeSheetPage() {
 
   const fileInputRef = useRef(null);
   const syncTimeoutRef = useRef(null);
+  const lastSyncedHashRef = useRef("");
 
   // Utility to show toast message
   const showToast = (msg) => {
@@ -52,6 +54,13 @@ export default function SdeSheetPage() {
   // Sync progress to cloud database
   const syncToCloud = useCallback(async (currentDone, currentStarred, currentNotes) => {
     if (!currentUser) return;
+    const currentHash = JSON.stringify({
+      done: Array.from(currentDone).sort(),
+      starred: Array.from(currentStarred).sort(),
+      notes: currentNotes,
+    });
+    if (currentHash === lastSyncedHashRef.current) return;
+
     try {
       setIsSyncing(true);
       const res = await fetch("/api/progress", {
@@ -64,12 +73,12 @@ export default function SdeSheetPage() {
         }),
       });
       if (res.ok) {
-        // Sync complete
+        lastSyncedHashRef.current = currentHash;
       }
     } catch (e) {
       console.error("Cloud sync error:", e);
     } finally {
-      setTimeout(() => setIsSyncing(false), 600);
+      setIsSyncing(false);
     }
   }, [currentUser]);
 
@@ -120,8 +129,25 @@ export default function SdeSheetPage() {
             setStarredIds(mergedStarred);
             setNotes(mergedNotes);
 
-            // Persist back to cloud if local had extra
-            syncToCloud(mergedDone, mergedStarred, mergedNotes);
+            // Record sync hash
+            lastSyncedHashRef.current = JSON.stringify({
+              done: Array.from(mergedDone).sort(),
+              starred: Array.from(mergedStarred).sort(),
+              notes: mergedNotes,
+            });
+
+            // Silent sync if local had extra entries
+            if (localDone.size > 0 || localStarred.size > 0 || Object.keys(localNotes).length > 0) {
+              fetch("/api/progress", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  done: Array.from(mergedDone),
+                  starred: Array.from(mergedStarred),
+                  notes: mergedNotes,
+                }),
+              }).catch(() => {});
+            }
           }
         }
       })
@@ -179,6 +205,13 @@ export default function SdeSheetPage() {
   // Debounced cloud sync whenever progress state updates
   useEffect(() => {
     if (!isLoaded || !currentUser) return;
+    const currentHash = JSON.stringify({
+      done: Array.from(doneIds).sort(),
+      starred: Array.from(starredIds).sort(),
+      notes: notes,
+    });
+    if (currentHash === lastSyncedHashRef.current) return;
+
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     syncTimeoutRef.current = setTimeout(() => {
@@ -423,7 +456,16 @@ export default function SdeSheetPage() {
           setStarredIds(mergedStarred);
           setNotes(mergedNotes);
 
-          syncToCloud(mergedDone, mergedStarred, mergedNotes);
+          lastSyncedHashRef.current = JSON.stringify({
+            done: Array.from(mergedDone).sort(),
+            starred: Array.from(mergedStarred).sort(),
+            notes: mergedNotes,
+          });
+
+          // Sync if local had items
+          if (doneIds.size > 0 || starredIds.size > 0) {
+            syncToCloud(mergedDone, mergedStarred, mergedNotes);
+          }
         }
 
         showToast(data.isNew ? "Account created & synced! 🚀" : `Welcome back, ${data.user.email}! 🚀`);
@@ -440,6 +482,8 @@ export default function SdeSheetPage() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       setCurrentUser(null);
+      setShowUserMenu(false);
+      lastSyncedHashRef.current = "";
       showToast("Signed out. Local progress retained.");
     } catch (e) {
       console.error(e);
@@ -544,27 +588,16 @@ export default function SdeSheetPage() {
       {/* Left Sidebar */}
       <aside className="sidebar">
         <div className="logo-container">
-          <div className="tuf-logo-badge" title="Take U Forward">
-            t<span>u</span>f
+          <div className="app-logo-badge" title="Striver's SDE Sheet">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+              <line x1="14" y1="4" x2="10" y2="20" stroke="var(--accent-orange)" strokeWidth="2.6" />
+            </svg>
           </div>
         </div>
 
         <nav className="nav-links">
-          <button className="nav-item" title="Home" onClick={() => showToast("Classic Striver's Sheet")}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-            <span>Home</span>
-          </button>
-
-          <button className="nav-item" title="Plus" onClick={() => showToast("TakeUForward Classic Edition")}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-            <span>Plus</span>
-          </button>
-
           <button className="nav-item active" title="SDE Sheet">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -578,6 +611,51 @@ export default function SdeSheetPage() {
         </nav>
 
         <div className="sidebar-bottom">
+          {/* User Account / Cloud Sync in Sidebar */}
+          {currentUser ? (
+            <div className="sidebar-profile-wrap">
+              <button
+                className="sidebar-profile-btn"
+                title={`${currentUser.email} (Cloud Synced)`}
+                onClick={() => setShowUserMenu(!showUserMenu)}
+              >
+                <div className="sidebar-avatar-circle">
+                  {currentUser.email[0]}
+                </div>
+                <span className={`sidebar-sync-dot ${isSyncing ? "syncing" : ""}`} />
+              </button>
+
+              {showUserMenu && (
+                <div className="sidebar-user-popover">
+                  <div className="sidebar-user-email-text" title={currentUser.email}>
+                    {currentUser.email}
+                  </div>
+                  <div className="sidebar-user-status-pill">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                    </svg>
+                    <span>{isSyncing ? "Syncing..." : "Cloud Synced"}</span>
+                  </div>
+                  <button className="sidebar-signout-action" onClick={() => { setShowUserMenu(false); handleSignOut(); }}>
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              className="icon-btn-ghost"
+              title="Sign In & Sync Progress"
+              onClick={() => { setShowAuthModal(true); setAuthError(""); }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </button>
+          )}
+
+          {/* Theme Toggle Button */}
           <button
             className="icon-btn-ghost"
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -602,6 +680,7 @@ export default function SdeSheetPage() {
             )}
           </button>
 
+          {/* Export */}
           <button className="icon-btn-ghost" title="Export Progress (JSON)" onClick={handleExportData}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -610,6 +689,7 @@ export default function SdeSheetPage() {
             </svg>
           </button>
 
+          {/* Import */}
           <button className="icon-btn-ghost" title="Import Progress" onClick={() => fileInputRef.current?.click()}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -619,6 +699,7 @@ export default function SdeSheetPage() {
           </button>
           <input type="file" ref={fileInputRef} onChange={handleImportData} accept=".json" style={{ display: "none" }} />
 
+          {/* Reset */}
           <button className="icon-btn-ghost" title="Reset All Progress" onClick={() => setShowResetModal(true)}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
@@ -630,86 +711,17 @@ export default function SdeSheetPage() {
         </div>
       </aside>
 
+      {/* Popover backdrop */}
+      {showUserMenu && (
+        <div className="popover-backdrop" onClick={() => setShowUserMenu(false)} />
+      )}
+
       {/* Main Content Area */}
       <main className="main-wrapper">
-        {/* Header Section */}
+        {/* Header Section - Clean & Minimal */}
         <header className="page-header">
           <div className="header-top-row">
             <h1 className="page-title">{sheetData.title}</h1>
-            
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <div className="last-updated-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span>Last updated : {sheetData.lastUpdated}</span>
-              </div>
-
-              {/* Theme Toggle Button in Header */}
-              <button
-                className="theme-toggle-btn"
-                onClick={toggleTheme}
-                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {theme === "dark" ? (
-                  <>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="5" />
-                      <line x1="12" y1="1" x2="12" y2="3" />
-                      <line x1="12" y1="21" x2="12" y2="23" />
-                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                      <line x1="1" y1="12" x2="3" y2="12" />
-                      <line x1="21" y1="12" x2="23" y2="12" />
-                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                    </svg>
-                    <span className="theme-toggle-label">Light</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                    </svg>
-                    <span className="theme-toggle-label">Dark</span>
-                  </>
-                )}
-              </button>
-
-              {/* User Authentication Status */}
-              <div className="user-auth-bar">
-                {currentUser ? (
-                  <>
-                    <span className={`cloud-sync-pill ${isSyncing ? "syncing" : ""}`}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                      </svg>
-                      {isSyncing ? "Syncing..." : "Cloud Synced"}
-                    </span>
-                    <div className="user-profile-btn" title={currentUser.email}>
-                      <div className="user-avatar-circle">
-                        {currentUser.email[0]}
-                      </div>
-                      <span style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {currentUser.email.split("@")[0]}
-                      </span>
-                      <button className="btn-signout" onClick={handleSignOut} title="Sign Out">
-                        Sign Out
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button className="btn-signin" onClick={() => { setShowAuthModal(true); setAuthError(""); }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                    <span>Sign In & Sync</span>
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
 
           <p className="page-description">
