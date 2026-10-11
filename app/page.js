@@ -4,16 +4,20 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import sheetData from "@/data/strivers_sde_sheet.json";
 
 export default function SdeSheetPage() {
-  // User Authentication & Cloud Sync
+  // User Authentication & Cloud Sync (Email + Math PIN)
   const [currentUser, setCurrentUser] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
-  const [authStep, setAuthStep] = useState("email"); // 'email' | 'otp'
-  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
+  const [authPasscode, setAuthPasscode] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [devOtpReceived, setDevOtpReceived] = useState(null);
+
+  // Funny Math PIN Calculator states
+  const [showMathHelper, setShowMathHelper] = useState(true);
+  const [calcDob, setCalcDob] = useState("2002");
+  const [calcPhone, setCalcPhone] = useState("77");
+  const [calcJersey, setCalcJersey] = useState("7"); // MS Dhoni 7
 
   // Sheet Progress states
   const [doneIds, setDoneIds] = useState(new Set());
@@ -37,7 +41,6 @@ export default function SdeSheetPage() {
   const [showKnowMore, setShowKnowMore] = useState(false);
 
   const fileInputRef = useRef(null);
-  const otpInputRefs = useRef([]);
   const syncTimeoutRef = useRef(null);
 
   // Utility to show toast message
@@ -364,64 +367,49 @@ export default function SdeSheetPage() {
     e.target.value = "";
   };
 
-  // Send OTP handler
-  const handleSendOtp = async (e) => {
-    e.preventDefault();
-    if (!authEmail.trim() || !authEmail.includes("@")) {
-      setAuthError("Please enter a valid email address.");
-      return;
-    }
+  // Computed Funny Math PIN
+  const computedMathPin = useMemo(() => {
+    const d = parseInt(calcDob) || 0;
+    const p = parseInt(calcPhone) || 0;
+    const j = parseInt(calcJersey) || 0;
+    return d + p + j;
+  }, [calcDob, calcPhone, calcJersey]);
 
-    setAuthLoading(true);
-    setAuthError("");
-    try {
-      const res = await fetch("/api/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: authEmail.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.error || "Failed to send OTP.");
-      } else {
-        setAuthStep("otp");
-        if (data.devOtp) {
-          setDevOtpReceived(data.devOtp);
-        }
-        showToast("Verification code sent! Check your email.");
-      }
-    } catch (err) {
-      setAuthError("Network error. Please try again.");
-    } finally {
-      setAuthLoading(false);
-    }
+  const applyMathPin = () => {
+    setAuthPasscode(String(computedMathPin));
+    showToast(`Applied Math PIN: ${computedMathPin}`);
   };
 
-  // Verify OTP handler
-  const handleVerifyOtp = async (codeToVerify) => {
-    const code = codeToVerify || otpCode.join("");
-    if (code.length !== 6) {
-      setAuthError("Please enter the complete 6-digit verification code.");
+  // Sign In / Create Account with Email + Math PIN
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    if (!authEmail.trim()) {
+      setAuthError("Please enter your Email or Username.");
+      return;
+    }
+    if (!authPasscode.trim()) {
+      setAuthError("Please enter your Math PIN.");
       return;
     }
 
     setAuthLoading(true);
     setAuthError("");
     try {
-      const res = await fetch("/api/auth/verify-otp", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: authEmail.trim(), code }),
+        body: JSON.stringify({
+          email: authEmail.trim(),
+          passcode: authPasscode.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setAuthError(data.error || "Invalid or expired code.");
+        setAuthError(data.error || "Failed to log in.");
       } else {
         setCurrentUser(data.user);
         setShowAuthModal(false);
-        setAuthStep("email");
-        setOtpCode(["", "", "", "", "", ""]);
-        setDevOtpReceived(null);
+        setAuthPasscode("");
 
         // Merge cloud data with existing local progress
         if (data.progress) {
@@ -433,51 +421,15 @@ export default function SdeSheetPage() {
           setStarredIds(mergedStarred);
           setNotes(mergedNotes);
 
-          // Save combined state to cloud
           syncToCloud(mergedDone, mergedStarred, mergedNotes);
         }
-        showToast(`Welcome back, ${data.user.email}! 🚀`);
+
+        showToast(data.isNew ? "Account created & synced! 🚀" : `Welcome back, ${data.user.email}! 🚀`);
       }
     } catch (err) {
       setAuthError("Network error. Please try again.");
     } finally {
       setAuthLoading(false);
-    }
-  };
-
-  // OTP input handling
-  const handleOtpChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return;
-
-    const newOtp = [...otpCode];
-    newOtp[index] = value.slice(-1);
-    setOtpCode(newOtp);
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit if all 6 digits entered
-    const fullCode = newOtp.join("");
-    if (fullCode.length === 6 && !newOtp.includes("")) {
-      handleVerifyOtp(fullCode);
-    }
-  };
-
-  const handleOtpKeyDown = (index, e) => {
-    if (e.key === "Backspace" && !otpCode[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault();
-    const paste = e.clipboardData.getData("text").trim();
-    if (/^\d{6}$/.test(paste)) {
-      const digits = paste.split("");
-      setOtpCode(digits);
-      handleVerifyOtp(paste);
     }
   };
 
@@ -1121,7 +1073,7 @@ export default function SdeSheetPage() {
         </div>
       </main>
 
-      {/* Authentication Modal (Email + OTP) */}
+      {/* Authentication Modal (Email + Funny Math PIN) */}
       {showAuthModal && (
         <div
           className="modal-overlay"
@@ -1131,136 +1083,143 @@ export default function SdeSheetPage() {
         >
           <div className="modal-dialog">
             <div className="modal-header">
-              <h3 className="modal-title">
-                {authStep === "email" ? "Sign in to Sync Progress" : "Enter Verification Code"}
-              </h3>
+              <h3 className="modal-title">Save & Sync Your Progress</h3>
               <button className="modal-close-btn" onClick={() => !authLoading && setShowAuthModal(false)}>
                 ✕
               </button>
             </div>
 
             <div className="modal-body">
-              {authStep === "email" ? (
-                <form onSubmit={handleSendOtp}>
-                  <div className="auth-input-group">
-                    <label className="auth-label">Email Address</label>
-                    <input
-                      type="email"
-                      className="auth-input"
-                      placeholder="your.email@example.com"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                    <p className="auth-hint-text">
-                      We will send a 6-digit one-time passcode to your email. No passwords needed.
-                    </p>
-                  </div>
-
-                  {authError && (
-                    <p style={{ color: "#dc2626", fontSize: "13.5px", marginBottom: "14px" }}>
-                      ⚠️ {authError}
-                    </p>
-                  )}
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => setShowAuthModal(false)}
-                      disabled={authLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn-primary" disabled={authLoading}>
-                      {authLoading ? "Sending Code..." : "Send Login Code"}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div>
-                  <p style={{ color: "#475569", fontSize: "14px", marginBottom: "16px" }}>
-                    We sent a 6-digit code to <strong>{authEmail}</strong>.
-                    <span
-                      style={{ color: "#ea580c", cursor: "pointer", marginLeft: "6px", fontWeight: 600 }}
-                      onClick={() => setAuthStep("email")}
-                    >
-                      Change
-                    </span>
+              <form onSubmit={handleAuthSubmit}>
+                <div className="auth-input-group">
+                  <label className="auth-label">Email or Username</label>
+                  <input
+                    type="text"
+                    className="auth-input"
+                    placeholder="e.g. gautam or gautam@example.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                  <p className="auth-hint-text">
+                    Zero verification emails needed. This identifies your account in the cloud.
                   </p>
+                </div>
 
-                  {/* Dev Mode OTP auto-fill banner */}
-                  {devOtpReceived && (
-                    <div className="dev-otp-banner">
-                      <span>Dev Mode OTP: <span className="dev-otp-code">{devOtpReceived}</span></span>
-                      <button
-                        className="btn-outline-action"
-                        type="button"
-                        onClick={() => {
-                          const digits = devOtpReceived.split("");
-                          setOtpCode(digits);
-                          handleVerifyOtp(devOtpReceived);
-                        }}
-                      >
-                        Auto-fill & Login
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="otp-digit-inputs" onPaste={handleOtpPaste}>
-                    {otpCode.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={(el) => (otpInputRefs.current[idx] = el)}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        className="otp-box-input"
-                        value={digit}
-                        onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                        autoFocus={idx === 0}
-                      />
-                    ))}
-                  </div>
-
-                  {authError && (
-                    <p style={{ color: "#dc2626", fontSize: "13.5px", marginBottom: "14px", textAlign: "center" }}>
-                      ⚠️ {authError}
-                    </p>
-                  )}
-
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "20px" }}>
+                <div className="auth-input-group" style={{ marginBottom: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <label className="auth-label" style={{ margin: 0 }}>Secret Math PIN</label>
                     <button
                       type="button"
-                      className="btn-signout"
-                      onClick={() => handleSendOtp({ preventDefault: () => {} })}
-                      disabled={authLoading}
+                      style={{ fontSize: "12px", color: "#ea580c", fontWeight: 700, cursor: "pointer" }}
+                      onClick={() => setShowMathHelper(!showMathHelper)}
                     >
-                      Resend Code
+                      {showMathHelper ? "Hide Math Helper" : "Show Math Helper 🧮"}
                     </button>
-                    <div style={{ display: "flex", gap: "10px" }}>
+                  </div>
+                  <input
+                    type="text"
+                    className="auth-input"
+                    placeholder="e.g. 2086 (or calculate below)"
+                    value={authPasscode}
+                    onChange={(e) => setAuthPasscode(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Funny Math PIN Calculator */}
+                {showMathHelper && (
+                  <div className="math-calc-card">
+                    <div className="math-calc-header">
+                      <span className="math-calc-title">
+                        <span>🧮</span> Memorable Math Passcode
+                      </span>
+                      <span className="math-calc-badge">Uncrackable & Fun</span>
+                    </div>
+
+                    <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px", lineHeight: "1.4" }}>
+                      Combine numbers only you know so you never forget:
+                    </p>
+
+                    <div className="math-inputs-grid">
+                      <div className="math-input-col">
+                        <label className="math-input-label">🎂 Birth Year</label>
+                        <input
+                          type="number"
+                          className="math-calc-input"
+                          value={calcDob}
+                          onChange={(e) => setCalcDob(e.target.value)}
+                          placeholder="2002"
+                        />
+                      </div>
+
+                      <div className="math-input-col">
+                        <label className="math-input-label">📱 Phone Last 2</label>
+                        <input
+                          type="number"
+                          className="math-calc-input"
+                          value={calcPhone}
+                          onChange={(e) => setCalcPhone(e.target.value)}
+                          placeholder="77"
+                        />
+                      </div>
+
+                      <div className="math-input-col">
+                        <label className="math-input-label">🏏 Jersey No.</label>
+                        <select
+                          className="math-calc-input"
+                          value={calcJersey}
+                          onChange={(e) => setCalcJersey(e.target.value)}
+                        >
+                          <option value="7">7 (MS Dhoni)</option>
+                          <option value="18">18 (Virat Kohli)</option>
+                          <option value="45">45 (Rohit Sharma)</option>
+                          <option value="10">10 (Sachin)</option>
+                          <option value="63">63 (SKY)</option>
+                          <option value="12">12 (Yuvraj)</option>
+                          <option value="99">99 (Ashwin)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="math-result-bar">
+                      <div className="math-result-formula">
+                        {calcDob || 0} + {calcPhone || 0} + {calcJersey || 0} ={" "}
+                        <span className="math-result-pill">{computedMathPin}</span>
+                      </div>
                       <button
                         type="button"
-                        className="btn-secondary"
-                        onClick={() => setShowAuthModal(false)}
-                        disabled={authLoading}
+                        className="btn-outline-action"
+                        style={{ color: "#ea580c", borderColor: "#fed7aa", fontWeight: 700 }}
+                        onClick={applyMathPin}
                       >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => handleVerifyOtp()}
-                        disabled={authLoading}
-                      >
-                        {authLoading ? "Verifying..." : "Verify & Sign In"}
+                        Use PIN ({computedMathPin})
                       </button>
                     </div>
                   </div>
+                )}
+
+                {authError && (
+                  <p style={{ color: "#dc2626", fontSize: "13.5px", marginBottom: "14px" }}>
+                    ⚠️ {authError}
+                  </p>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowAuthModal(false)}
+                    disabled={authLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={authLoading}>
+                    {authLoading ? "Saving..." : "Sign In & Sync"}
+                  </button>
                 </div>
-              )}
+              </form>
             </div>
           </div>
         </div>

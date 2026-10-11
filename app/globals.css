@@ -1302,3 +1302,98 @@ input, select, textarea {
   margin-top: 8px;
 }
 
+/* Math PIN Calculator Card */
+.math-calc-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+
+.math-calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.math-calc-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.math-calc-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: #ffedd5;
+  color: #c2410c;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.math-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.math-input-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.math-input-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.math-calc-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.math-calc-input:focus {
+  border-color: var(--accent-orange);
+}
+
+.math-result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.math-result-formula {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  font-family: var(--font-mono);
+}
+
+.math-result-pill {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ea580c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  padding: 3px 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+}
+
+
