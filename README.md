@@ -49,8 +49,22 @@ A faithful, modern recreation of the beloved classic **TakeUForward Striver's SD
 3. Click **Create Database** and select **Postgres** (powered by Neon).
 4. Connect it to your project. Vercel will automatically set the `POSTGRES_URL` environment variable. The app will automatically initialize the necessary tables (`users`, `otps`, `user_progress`) on first run!
 
-### 2. Email Sending (Resend)
-1. Sign up for a free account at [Resend](https://resend.com) and create an API Key.
-2. In your Vercel Project Settings $\rightarrow$ **Environment Variables**, add:
+### 2. Email Sending (Choose One)
+
+#### Option A: Free Gmail SMTP (No Custom Domain Needed! 🎉)
+If you don't own a custom domain, you can use any free Gmail account to send up to 500 emails/day to any recipient:
+1. Go to your [Google Account Security](https://myaccount.google.com/security).
+2. Enable 2-Step Verification if not already enabled.
+3. Search for **"App Passwords"** and generate a new password (e.g., named "Strivers Sheet").
+4. Add to your Vercel Environment Variables:
+   - `SMTP_USER`: `your_email@gmail.com`
+   - `SMTP_PASS`: `your_16_character_app_password`
+   - `JWT_SECRET`: Any random 32+ character string
+
+#### Option B: Resend (Requires Custom Domain for external users)
+1. Sign up at [Resend](https://resend.com) and create an API Key.
+2. In Vercel Environment Variables, add:
    - `RESEND_API_KEY`: `re_your_api_key_here`
    - `JWT_SECRET`: Any random 32+ character string
+3. *Note:* If you haven't verified a custom domain on Resend, Resend will only send to your own registered email. If Resend blocks an external recipient, the app automatically falls back to displaying the OTP in the UI so the user can still log in!
+
