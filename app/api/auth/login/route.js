@@ -5,23 +5,25 @@ import { setSessionCookie } from "@/lib/auth";
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { email, passcode } = body;
+    const email = body.email;
+    const pin = body.pin || body.passcode;
 
     if (!email || typeof email !== "string" || !email.trim()) {
       return NextResponse.json(
-        { error: "Please enter your Email or User ID." },
+        { error: "Please enter a valid email address." },
         { status: 400 }
       );
     }
 
-    if (!passcode || String(passcode).trim().length === 0) {
+    const cleanPin = String(pin || "").trim();
+    if (!cleanPin || !/^\d{6}$/.test(cleanPin)) {
       return NextResponse.json(
-        { error: "Please enter your secret Math PIN." },
+        { error: "Please enter a valid 6-digit numeric PIN." },
         { status: 400 }
       );
     }
 
-    const result = await authenticateOrRegister(email.trim(), passcode);
+    const result = await authenticateOrRegister(email.trim(), cleanPin);
 
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: 400 });

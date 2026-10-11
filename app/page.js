@@ -4,20 +4,18 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import sheetData from "@/data/strivers_sde_sheet.json";
 
 export default function SdeSheetPage() {
-  // User Authentication & Cloud Sync (Email + Math PIN)
+  // User Authentication & Cloud Sync (Email + 6-Digit PIN)
   const [currentUser, setCurrentUser] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
-  const [authPasscode, setAuthPasscode] = useState("");
+  const [authPin, setAuthPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // Funny Math PIN Calculator states
-  const [showMathHelper, setShowMathHelper] = useState(true);
-  const [calcDob, setCalcDob] = useState("2002");
-  const [calcPhone, setCalcPhone] = useState("77");
-  const [calcJersey, setCalcJersey] = useState("7"); // MS Dhoni 7
+  // Dark Theme state ('dark' | 'light')
+  const [theme, setTheme] = useState("dark");
 
   // Sheet Progress states
   const [doneIds, setDoneIds] = useState(new Set());
@@ -128,10 +126,26 @@ export default function SdeSheetPage() {
         }
       })
       .catch((err) => console.error("Session check failed:", err))
-      .finally(() => {
-        setIsLoaded(true);
-      });
+    // Initialize Dark Theme
+    try {
+      const savedTheme = localStorage.getItem("tuf_theme") || "dark";
+      setTheme(savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    } catch (e) {}
+
+    setIsLoaded(true);
   }, [syncToCloud]);
+
+  // Toggle Dark/Light Theme
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem("tuf_theme", nextTheme);
+    } catch (e) {}
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    showToast(`Switched to ${nextTheme === "dark" ? "Dark" : "Light"} mode`);
+  };
 
   // Save to localStorage
   useEffect(() => {
@@ -367,28 +381,16 @@ export default function SdeSheetPage() {
     e.target.value = "";
   };
 
-  // Computed Funny Math PIN
-  const computedMathPin = useMemo(() => {
-    const d = parseInt(calcDob) || 0;
-    const p = parseInt(calcPhone) || 0;
-    const j = parseInt(calcJersey) || 0;
-    return d + p + j;
-  }, [calcDob, calcPhone, calcJersey]);
-
-  const applyMathPin = () => {
-    setAuthPasscode(String(computedMathPin));
-    showToast(`Applied Math PIN: ${computedMathPin}`);
-  };
-
-  // Sign In / Create Account with Email + Math PIN
+  // Sign In / Create Account with Email + 6-Digit PIN
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (!authEmail.trim()) {
-      setAuthError("Please enter your Email or Username.");
+      setAuthError("Please enter your email address.");
       return;
     }
-    if (!authPasscode.trim()) {
-      setAuthError("Please enter your Math PIN.");
+    const cleanPin = authPin.trim();
+    if (!/^\d{6}$/.test(cleanPin)) {
+      setAuthError("Please enter a valid 6-digit numeric PIN.");
       return;
     }
 
@@ -400,7 +402,7 @@ export default function SdeSheetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: authEmail.trim(),
-          passcode: authPasscode.trim(),
+          pin: cleanPin,
         }),
       });
       const data = await res.json();
@@ -409,7 +411,7 @@ export default function SdeSheetPage() {
       } else {
         setCurrentUser(data.user);
         setShowAuthModal(false);
-        setAuthPasscode("");
+        setAuthPin("");
 
         // Merge cloud data with existing local progress
         if (data.progress) {
@@ -576,6 +578,30 @@ export default function SdeSheetPage() {
         </nav>
 
         <div className="sidebar-bottom">
+          <button
+            className="icon-btn-ghost"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
+
           <button className="icon-btn-ghost" title="Export Progress (JSON)" onClick={handleExportData}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -611,7 +637,7 @@ export default function SdeSheetPage() {
           <div className="header-top-row">
             <h1 className="page-title">{sheetData.title}</h1>
             
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <div className="last-updated-badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
@@ -619,6 +645,37 @@ export default function SdeSheetPage() {
                 </svg>
                 <span>Last updated : {sheetData.lastUpdated}</span>
               </div>
+
+              {/* Theme Toggle Button in Header */}
+              <button
+                className="theme-toggle-btn"
+                onClick={toggleTheme}
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {theme === "dark" ? (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="5" />
+                      <line x1="12" y1="1" x2="12" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="23" />
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                      <line x1="1" y1="12" x2="3" y2="12" />
+                      <line x1="21" y1="12" x2="23" y2="12" />
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    </svg>
+                    <span className="theme-toggle-label">Light</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                    <span className="theme-toggle-label">Dark</span>
+                  </>
+                )}
+              </button>
 
               {/* User Authentication Status */}
               <div className="user-auth-bar">
@@ -643,7 +700,7 @@ export default function SdeSheetPage() {
                     </div>
                   </>
                 ) : (
-                  <button className="btn-signin" onClick={() => { setShowAuthModal(true); setAuthStep("email"); setAuthError(""); }}>
+                  <button className="btn-signin" onClick={() => { setShowAuthModal(true); setAuthError(""); }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -663,12 +720,12 @@ export default function SdeSheetPage() {
           </p>
 
           {showKnowMore && (
-            <div style={{ marginTop: "12px", padding: "14px 18px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0", fontSize: "13.5px", color: "#475569" }}>
-              <strong style={{ color: "#0f172a" }}>💡 Tips for cracking top tech interviews:</strong>
+            <div style={{ marginTop: "12px", padding: "14px 18px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border-color)", fontSize: "13.5px", color: "var(--text-secondary)" }}>
+              <strong style={{ color: "var(--text-primary)" }}>💡 Tips for cracking top tech interviews:</strong>
               <ul style={{ paddingLeft: "20px", marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
                 <li>Do not jump straight to the code. Spend 10-15 minutes understanding edge cases, brute force, and optimal logic.</li>
                 <li>Mark problems for <strong>Revision ⭐</strong> that took you more than 30 minutes to solve or where the pattern was tricky.</li>
-                <li><strong>Cloud Sync ☁️:</strong> Sign in with just your email and OTP to synchronize your progress across all your devices securely on Vercel Postgres / Neon!</li>
+                <li><strong>Cloud Sync ☁️:</strong> Sign in with your email and 6-digit PIN to synchronize your progress across all your devices securely on Vercel Postgres / Neon!</li>
               </ul>
             </div>
           )}
@@ -1073,7 +1130,7 @@ export default function SdeSheetPage() {
         </div>
       </main>
 
-      {/* Authentication Modal (Email + Funny Math PIN) */}
+      {/* Authentication Modal (Email + 6-Digit PIN) */}
       {showAuthModal && (
         <div
           className="modal-overlay"
@@ -1092,121 +1149,55 @@ export default function SdeSheetPage() {
             <div className="modal-body">
               <form onSubmit={handleAuthSubmit}>
                 <div className="auth-input-group">
-                  <label className="auth-label">Email or Username</label>
+                  <label className="auth-label">Email Address</label>
                   <input
-                    type="text"
+                    type="email"
                     className="auth-input"
-                    placeholder="e.g. gautam or gautam@example.com"
+                    placeholder="name@example.com"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
                     required
                     autoFocus
                   />
                   <p className="auth-hint-text">
-                    Zero verification emails needed. This identifies your account in the cloud.
+                    Identifies your account in the cloud to sync across devices.
                   </p>
                 </div>
 
-                <div className="auth-input-group" style={{ marginBottom: "12px" }}>
+                <div className="auth-input-group">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <label className="auth-label" style={{ margin: 0 }}>Secret Math PIN</label>
+                    <label className="auth-label" style={{ margin: 0 }}>6-Digit Security PIN</label>
                     <button
                       type="button"
-                      style={{ fontSize: "12px", color: "#ea580c", fontWeight: 700, cursor: "pointer" }}
-                      onClick={() => setShowMathHelper(!showMathHelper)}
+                      style={{ fontSize: "12px", color: "var(--accent-orange)", fontWeight: 600, cursor: "pointer" }}
+                      onClick={() => setShowPin(!showPin)}
                     >
-                      {showMathHelper ? "Hide Math Helper" : "Show Math Helper 🧮"}
+                      {showPin ? "Hide PIN" : "Show PIN"}
                     </button>
                   </div>
                   <input
-                    type="text"
-                    className="auth-input"
-                    placeholder="e.g. 2086 (or calculate below)"
-                    value={authPasscode}
-                    onChange={(e) => setAuthPasscode(e.target.value)}
+                    type={showPin ? "text" : "password"}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    className="auth-input auth-pin-input"
+                    placeholder="Enter 6-digit PIN"
+                    value={authPin}
+                    onChange={(e) => setAuthPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     required
                   />
+                  <p className="auth-hint-text">
+                    Enter any 6-digit numeric PIN to protect and access your progress.
+                  </p>
                 </div>
 
-                {/* Funny Math PIN Calculator */}
-                {showMathHelper && (
-                  <div className="math-calc-card">
-                    <div className="math-calc-header">
-                      <span className="math-calc-title">
-                        <span>🧮</span> Memorable Math Passcode
-                      </span>
-                      <span className="math-calc-badge">Uncrackable & Fun</span>
-                    </div>
-
-                    <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px", lineHeight: "1.4" }}>
-                      Combine numbers only you know so you never forget:
-                    </p>
-
-                    <div className="math-inputs-grid">
-                      <div className="math-input-col">
-                        <label className="math-input-label">🎂 Birth Year</label>
-                        <input
-                          type="number"
-                          className="math-calc-input"
-                          value={calcDob}
-                          onChange={(e) => setCalcDob(e.target.value)}
-                          placeholder="2002"
-                        />
-                      </div>
-
-                      <div className="math-input-col">
-                        <label className="math-input-label">📱 Phone Last 2</label>
-                        <input
-                          type="number"
-                          className="math-calc-input"
-                          value={calcPhone}
-                          onChange={(e) => setCalcPhone(e.target.value)}
-                          placeholder="77"
-                        />
-                      </div>
-
-                      <div className="math-input-col">
-                        <label className="math-input-label">🏏 Jersey No.</label>
-                        <select
-                          className="math-calc-input"
-                          value={calcJersey}
-                          onChange={(e) => setCalcJersey(e.target.value)}
-                        >
-                          <option value="7">7 (MS Dhoni)</option>
-                          <option value="18">18 (Virat Kohli)</option>
-                          <option value="45">45 (Rohit Sharma)</option>
-                          <option value="10">10 (Sachin)</option>
-                          <option value="63">63 (SKY)</option>
-                          <option value="12">12 (Yuvraj)</option>
-                          <option value="99">99 (Ashwin)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="math-result-bar">
-                      <div className="math-result-formula">
-                        {calcDob || 0} + {calcPhone || 0} + {calcJersey || 0} ={" "}
-                        <span className="math-result-pill">{computedMathPin}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-outline-action"
-                        style={{ color: "#ea580c", borderColor: "#fed7aa", fontWeight: 700 }}
-                        onClick={applyMathPin}
-                      >
-                        Use PIN ({computedMathPin})
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {authError && (
-                  <p style={{ color: "#dc2626", fontSize: "13.5px", marginBottom: "14px" }}>
+                  <p style={{ color: "#ef4444", fontSize: "13.5px", marginBottom: "14px", fontWeight: 500 }}>
                     ⚠️ {authError}
                   </p>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
                   <button
                     type="button"
                     className="btn-secondary"
@@ -1216,7 +1207,7 @@ export default function SdeSheetPage() {
                     Cancel
                   </button>
                   <button type="submit" className="btn-primary" disabled={authLoading}>
-                    {authLoading ? "Saving..." : "Sign In & Sync"}
+                    {authLoading ? "Signing In..." : "Sign In & Sync"}
                   </button>
                 </div>
               </form>
