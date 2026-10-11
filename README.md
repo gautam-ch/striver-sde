@@ -1,6 +1,6 @@
-# Striver's SDE Sheet (Classic Edition) with Email OTP Auth & Cloud Sync
+# Striver's SDE Sheet (Classic Edition) with Math PIN Sync
 
-A faithful, modern recreation of the beloved classic **TakeUForward Striver's SDE Sheet** with clean UI, full 191 problem dataset, local browser persistence, and **Vercel Postgres / Neon cloud synchronization with passwordless Email + OTP authentication**.
+A faithful, modern recreation of the beloved classic **TakeUForward Striver's SDE Sheet** with clean UI, full 191 problem dataset, local browser persistence, and **Vercel Postgres / Neon cloud synchronization using a fun, memorable Math PIN (no emails, no passwords, no verification required)**.
 
 ---
 
@@ -8,10 +8,10 @@ A faithful, modern recreation of the beloved classic **TakeUForward Striver's SD
 
 - **All 191 Questions & 27 Sections**: 100% exact question dataset extracted from the classic Striver's SDE sheet.
 - **Classic UI**: Recreated the signature TakeUForward design (clean light theme, sidebar, progress card, accordions).
-- **Passwordless Email + OTP Auth**:
-  - Sign in with just your email address and a 6-digit OTP code (no passwords to remember).
-  - Sends emails via **Resend** in production.
-  - Automatic **Dev Mode** fallback for local testing without external API keys.
+- **🧮 Memorable Math PIN Account**:
+  - Sign in with an Email or Username + a secret Math PIN.
+  - Interactive PIN formula: `(Birth Year) + (Phone Last 2 Digits) + (Cricketer Jersey No.) = Secret PIN`.
+  - Zero external email services, zero spam, zero passwords, and zero domain verification.
 - **Cloud Progress Sync (Vercel Postgres / Neon)**:
   - Solved questions, revision stars, and personal notes are synchronized to your account in the cloud.
   - Automatic background debounced autosave.
@@ -37,8 +37,6 @@ A faithful, modern recreation of the beloved classic **TakeUForward Striver's SD
 
 3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-> In local development mode, if no `RESEND_API_KEY` is provided, OTP codes are logged directly to the server console and displayed inside the UI modal with a one-click "Auto-fill & Login" helper.
-
 ---
 
 ## 🌐 Deploying to Vercel
@@ -47,24 +45,8 @@ A faithful, modern recreation of the beloved classic **TakeUForward Striver's SD
 1. Push this project to GitHub and import it into **Vercel**.
 2. In your Vercel project dashboard, go to the **Storage** tab.
 3. Click **Create Database** and select **Postgres** (powered by Neon).
-4. Connect it to your project. Vercel will automatically set the `POSTGRES_URL` environment variable. The app will automatically initialize the necessary tables (`users`, `otps`, `user_progress`) on first run!
+4. Connect it to your project. Vercel will automatically set the `POSTGRES_URL` environment variable. The app will automatically initialize the necessary tables (`users`, `user_progress`) on first run!
 
-### 2. Email Sending (Choose One)
-
-#### Option A: Free Gmail SMTP (No Custom Domain Needed! 🎉)
-If you don't own a custom domain, you can use any free Gmail account to send up to 500 emails/day to any recipient:
-1. Go to your [Google Account Security](https://myaccount.google.com/security).
-2. Enable 2-Step Verification if not already enabled.
-3. Search for **"App Passwords"** and generate a new password (e.g., named "Strivers Sheet").
-4. Add to your Vercel Environment Variables:
-   - `SMTP_USER`: `your_email@gmail.com`
-   - `SMTP_PASS`: `your_16_character_app_password`
-   - `JWT_SECRET`: Any random 32+ character string
-
-#### Option B: Resend (Requires Custom Domain for external users)
-1. Sign up at [Resend](https://resend.com) and create an API Key.
-2. In Vercel Environment Variables, add:
-   - `RESEND_API_KEY`: `re_your_api_key_here`
-   - `JWT_SECRET`: Any random 32+ character string
-3. *Note:* If you haven't verified a custom domain on Resend, Resend will only send to your own registered email. If Resend blocks an external recipient, the app automatically falls back to displaying the OTP in the UI so the user can still log in!
-
+### 2. Environment Variables
+In your Vercel Project Settings $\rightarrow$ **Environment Variables**, you only need:
+- `JWT_SECRET`: Any random 32+ character string
